@@ -1,0 +1,84 @@
+name: Docker Build and Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Start services
+        run: docker compose up -d
+
+      - name: Wait for services to become healthy
+        run: |
+          for i in {1..12}; do
+            WEB_STATUS=$(docker inspect --format='{{.State.Health.Status}}' fullstack-web 2>/dev/null || echo "starting")
+            DB_STATUS=$(docker inspect --format='{{.State.Health.Status}}' fullstack-db 2>/dev/null || echo "starting")
+
+            echo "Web: $WEB_STATUS | Database: $DB_STATUS"
+
+            if [ "$WEB_STATUS" = "healthy" ] && [ "$DB_STATUS" = "healthy" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+      - name: Check service health
+        run: |
+          docker compose ps
+          test "$(docker inspect --format='{{.State.Health.Status}}' fullstack-web)" = "healthy"
+          test "$(docker inspect --format='{{.State.Health.Status}}' fullstack-db)" = "healthy"
+
+      - name: Verify application
+        run: |
+          curl http://localhost:3000/health
+
+      - name: Verify non-root user
+        run: |
+          USER=$(docker compose exec -T web whoami)
+          echo "Container user: $USER"
+          test "$USER" = "appuser"
+
+      - name: Check image size
+        run: |
+          SIZE=$(docker image inspect docker-fullstack-app-web:latest --format='{{.Size}}')
+          echo "Image size in bytes: $SIZE"
+
+          MAX=$((150 * 1024 * 1024))
+
+          if [ "$SIZE" -lt "$MAX" ]; then
+            echo "Image size is below 150 MB."
+          else
+            echo "Image size exceeds 150 MB."
+            exit 1
+          fi
+
+      - name: Test database volume persistence
+        run: |
+          docker compose exec -T db psql -U appuser -d appdb -c "CREATE TABLE IF NOT EXISTS persistence_test (id SERIAL PRIMARY KEY, message TEXT); INSERT INTO persistence_test (message) VALUES ('Docker volume persistence works');"
+
+          docker compose restart db
+
+          sleep 10
+
+          docker compose exec -T db psql -U appuser -d appdb -c "SELECT * FROM persistence_test;"
+
+      - name: Show container logs
+        if: always()
+        run: docker compose logs
+
+      - name: Shut down containers
+        if: always()
+        run: docker compose down -v
