@@ -1,3 +1,5 @@
+![CI/CD Pipeline](https://github.com/prarthanashrirambankar-dev/docker-fullstack-app/actions/workflows/ci-cd.yml/badge.svg)
+
 # 🐳 Multi-Stage Docker Full-Stack Application
 
 A production-ready Node.js and PostgreSQL full-stack application containerized using Docker Multi-Stage Builds.
