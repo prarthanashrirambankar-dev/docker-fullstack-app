@@ -21,5 +21,15 @@ module.exports = [
       "node_modules/",
       "coverage/"
     ]
+  },
+  {
+    files: ["tests/**/*.js"],
+    languageOptions: {
+      globals: {
+        describe: "readonly",
+        test: "readonly",
+        expect: "readonly"
+      }
+    }
   }
 ];
